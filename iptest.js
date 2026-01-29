@@ -1,5 +1,6 @@
 const IPPURE_URL = "https://my.ippure.com/v1/info";
 const IPV4_API = "http://ip-api.com/json?lang=zh-CN";
+const IPAPI_IS_URL = "https://api.ipapi.is/";
 
 const MarkIP = ((typeof $argument !== 'undefined' && $argument) || 'false').toLowerCase() === 'true';
 
@@ -219,11 +220,23 @@ async function fetchIpinfoIo(ip) {
 
 (async () => {
   let ip = null;
+  let cachedIpapiResponse = null;
+
   try {
     const { data: ipv4Data } = await httpGet(IPV4_API);
     const ipv4Json = safeJsonParse(ipv4Data);
     ip = ipv4Json?.query || ipv4Json?.ip || String(ipv4Data || "").trim();
   } catch (_) { }
+
+  if (!ip) {
+    try {
+      const { data } = await httpGet(IPAPI_IS_URL);
+      cachedIpapiResponse = safeJsonParse(data);
+      if (cachedIpapiResponse && cachedIpapiResponse.ip) {
+        ip = cachedIpapiResponse.ip;
+      }
+    } catch (_) { }
+  }
 
   if (!ip) {
     $done({ title: "IP 纯净度", content: "获取 IPv4 失败", icon: "exclamationmark.triangle.fill" });
@@ -238,7 +251,7 @@ async function fetchIpinfoIo(ip) {
   } catch (_) { }
 
   const tasks = {
-    ipapi: fetchIpapi(ip),
+    ipapi: cachedIpapiResponse ? Promise.resolve(cachedIpapiResponse) : fetchIpapi(ip),
     ip2locIo: fetchIp2locationIo(ip),
     ipinfoIo: fetchIpinfoIo(ip),
     dbipHtml: fetchDbipHtml(ip),
@@ -278,10 +291,10 @@ async function fetchIpinfoIo(ip) {
   const meta = severityMeta(maxSev);
   const riskLines = grades.map((g) => g.text).filter(Boolean);
 
-// 纯文本输出
-const showIP = MarkIP ? maskIP(ip) : ip;
+  // 纯文本输出
+  const showIP = MarkIP ? maskIP(ip) : ip;
 
-let content = `IP：${showIP}
+  let content = `IP：${showIP}
 ASN：${asnText}
 位置：${flag} ${country} ${city}
 类型：${hostingLine} （来源：IP2Location）
@@ -289,37 +302,37 @@ ASN：${asnText}
 —— 多源评分 ——
 ${riskLines.join('\n')}`;
 
-// IP类型风险
-const factorParts = [];
-if (ip2loc.isProxy) factorParts.push("Proxy");
-if (ip2loc.proxyType && ip2loc.proxyType !== "-") factorParts.push(ip2loc.proxyType);
-if (ip2loc.threat && ip2loc.threat !== "-") factorParts.push(`威胁:${ip2loc.threat}`);
-if (ok.ipapi) {
-  const items = [];
-  if (ok.ipapi.is_proxy === true) items.push("Proxy");
-  if (ok.ipapi.is_tor === true) items.push("Tor");
-  if (ok.ipapi.is_vpn === true) items.push("VPN");
-  if (ok.ipapi.is_datacenter === true) items.push("Datacenter");
-  if (ok.ipapi.is_abuser === true) items.push("Abuser");
-  if (items.length) factorParts.push(`ipapi: ${items.join("/")}`);
-}
-if (ok.ipinfoIo?.detected?.length) {
-  factorParts.push(`ipinfo: ${ok.ipinfoIo.detected.join("/")}`);
-}
-if (ok.ipregistry?.security) {
-  const sec = ok.ipregistry.security;
-  const items = [];
-  if (sec.is_proxy === true) items.push("Proxy");
-  if (sec.is_tor === true) items.push("Tor");
-  if (sec.is_vpn === true) items.push("VPN");
-  if (sec.is_cloud_provider === true) items.push("Hosting");
-  if (sec.is_abuser === true) items.push("Abuser");
-  if (items.length) factorParts.push(`ipregistry: ${items.join("/")}`);
-}
+  // IP类型风险
+  const factorParts = [];
+  if (ip2loc.isProxy) factorParts.push("Proxy");
+  if (ip2loc.proxyType && ip2loc.proxyType !== "-") factorParts.push(ip2loc.proxyType);
+  if (ip2loc.threat && ip2loc.threat !== "-") factorParts.push(`威胁:${ip2loc.threat}`);
+  if (ok.ipapi) {
+    const items = [];
+    if (ok.ipapi.is_proxy === true) items.push("Proxy");
+    if (ok.ipapi.is_tor === true) items.push("Tor");
+    if (ok.ipapi.is_vpn === true) items.push("VPN");
+    if (ok.ipapi.is_datacenter === true) items.push("Datacenter");
+    if (ok.ipapi.is_abuser === true) items.push("Abuser");
+    if (items.length) factorParts.push(`ipapi: ${items.join("/")}`);
+  }
+  if (ok.ipinfoIo?.detected?.length) {
+    factorParts.push(`ipinfo: ${ok.ipinfoIo.detected.join("/")}`);
+  }
+  if (ok.ipregistry?.security) {
+    const sec = ok.ipregistry.security;
+    const items = [];
+    if (sec.is_proxy === true) items.push("Proxy");
+    if (sec.is_tor === true) items.push("Tor");
+    if (sec.is_vpn === true) items.push("VPN");
+    if (sec.is_cloud_provider === true) items.push("Hosting");
+    if (sec.is_abuser === true) items.push("Abuser");
+    if (items.length) factorParts.push(`ipregistry: ${items.join("/")}`);
+  }
 
-if (factorParts.length) {
-  content += `\n\n—— IP类型风险 ——\n${factorParts.join('\n')}`;
-}
+  if (factorParts.length) {
+    content += `\n\n—— IP类型风险 ——\n${factorParts.join('\n')}`;
+  }
 
   $done({
     title: "节点 IP 风险汇总",
