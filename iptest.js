@@ -284,7 +284,7 @@ const showIP = MarkIP ? maskIP(ip) : ip;
 let content = `IP：${showIP}
 ASN：${asnText}
 位置：${flag} ${country} ${city}
-类型：${hostingLine}
+类型：${hostingLine} （来源：IP2Location）
 
 —— 多源评分 ——
 ${riskLines.join('\n')}`;
