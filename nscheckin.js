@@ -15,8 +15,8 @@ if (typeof $argument !== "undefined" && $argument) {
         // 过滤掉用户可能填写的占位符，如 "xxx"、"无"、"none" 等
         const isValid = (val) => val && val.trim() !== "xxx" && val.trim() !== "无" && val.trim().toLowerCase() !== "none";
 
-        checkinCookie = isValid(arg.NS_COOKIE) ? arg.NS_COOKIE : "";
-        tgToken = isValid(arg.TG_BOT_TOKEN) ? arg.TG_BOT_TOKEN : "";
+        checkinCookie = isValid(arg.NS_COOKIE) ? String(arg.NS_COOKIE) : "";
+        tgToken = isValid(arg.TG_BOT_TOKEN) ? String(arg.TG_BOT_TOKEN) : "";
         tgUserId = isValid(arg.TG_USER_ID) ? String(arg.TG_USER_ID) : "";
 
         notifyOnlyFail = (arg.TG_NOTIFY_ONLY_FAIL === "true" || arg.TG_NOTIFY_ONLY_FAIL === "1" || arg.TG_NOTIFY_ONLY_FAIL === true);
