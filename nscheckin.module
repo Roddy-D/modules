@@ -1,0 +1,13 @@
+#!name=NodeSeek 签到增强版
+#!desc=NodeSeek 论坛每日自动签到，支持 TG 推送。开启抓取开关后访问个人主页即可获取 Cookie。
+#!author=Roddy-D
+#!date=2026-02-22
+#!arguments=签到执行时间:1 0 * * *,开启Cookie抓取:true,NodeSeek Cookie:xxx,TG Bot Token:xxx,TG User ID:xxx,仅失败时通知:false,随机奖励模式:false
+#!arguments-desc=签到执行时间: 默认每晚一点执行 (格式如 1 0 * * *)\n\n开启Cookie抓取\n- true: 打开后去 NodeSeek 个人中心可自动抓取 Cookie。抓到后请关闭\n- false: 关闭抓取\n\nNodeSeek Cookie: 抓取后会自动保存，若手动配置则在此填入完整 Cookie\n\nTG Bot Token: 选填，Telegram 机器人的 Token\n\nTG User ID: 选填，接收消息的 Telegram User ID\n\n仅失败时通知\n- false: 所有签到结果都发送\n- true: 仅在签到失败、风控、异常时才推送 TG\n\n随机奖励模式\n- false: 固定保底奖励\n- true: 随机抽奖模式
+
+[Script]
+NS签到获取Cookie = type=http-request, pattern=^https:\/\/www\.nodeseek\.com\/api\/account\/getInfo\/\d+\?readme=1$, requires-body=false, script-path=https://raw.githubusercontent.com/Roddy-D/modules/refs/heads/main/nscheckin.js, argument="{\"ENABLE_CAPTURE\":{{{开启Cookie抓取}}}}"
+NS签到定时执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Roddy-D/modules/refs/heads/main/nscheckin.js, argument="{\"NS_COOKIE\":\"{{{NodeSeek Cookie}}}\",\"TG_BOT_TOKEN\":\"{{{TG Bot Token}}}\",\"TG_USER_ID\":\"{{{TG User ID}}}\",\"TG_NOTIFY_ONLY_FAIL\":{{{仅失败时通知}}},\"RANDOM_REWARD\":{{{随机奖励模式}}}}"
+
+[MITM]
+hostname = %APPEND% www.nodeseek.com
