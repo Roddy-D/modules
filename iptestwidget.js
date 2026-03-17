@@ -62,24 +62,24 @@ export default async function(ctx) {
     var lv = String(m[2]).trim();
     var map = { 'Very Low': 0, 'Low': 0, 'Elevated': 2, 'High': 3, 'Very High': 4 };
     var sev = map[lv] !== undefined ? map[lv] : 2;
-    return { sev: sev, t: 'ipapi: ' + lv + ' (' + pct + ')' };
+    return { sev: sev, t: 'ipapi.is: ' + lv + ' (' + pct + ')' };
   }
 
   function gradeIp2loc(score) {
     var s = ti(score); if (s === null) return null;
-    if (s >= 66) return { sev: 3, t: 'IP2Loc: \u9AD8\u5371 (' + s + ')' };
-    if (s >= 33) return { sev: 1, t: 'IP2Loc: \u4E2D\u5371 (' + s + ')' };
-    return { sev: 0, t: 'IP2Loc: \u4F4E\u5371 (' + s + ')' };
+    if (s >= 66) return { sev: 3, t: 'IP2Location: \u9AD8\u5371 (' + s + ')' };
+    if (s >= 33) return { sev: 1, t: 'IP2Location: \u4E2D\u5371 (' + s + ')' };
+    return { sev: 0, t: 'IP2Location: \u4F4E\u5371 (' + s + ')' };
   }
 
   function gradeScam(html) {
     if (!html) return null;
     var m = html.match(/Fraud\s*Score[:\s]*(\d+)/i) || html.match(/class="score"[^>]*>(\d+)/i);
     var s = m ? ti(m[1]) : null; if (s === null) return null;
-    if (s >= 90) return { sev: 4, t: 'Scam: \u6781\u9AD8 (' + s + ')' };
-    if (s >= 60) return { sev: 3, t: 'Scam: \u9AD8\u5371 (' + s + ')' };
-    if (s >= 20) return { sev: 1, t: 'Scam: \u4E2D\u5371 (' + s + ')' };
-    return { sev: 0, t: 'Scam: \u4F4E\u5371 (' + s + ')' };
+    if (s >= 90) return { sev: 4, t: 'Scamalytics: \u6781\u9AD8 (' + s + ')' };
+    if (s >= 60) return { sev: 3, t: 'Scamalytics: \u9AD8\u5371 (' + s + ')' };
+    if (s >= 20) return { sev: 1, t: 'Scamalytics: \u4E2D\u5371 (' + s + ')' };
+    return { sev: 0, t: 'Scamalytics: \u4F4E\u5371 (' + s + ')' };
   }
 
   function gradeDbip(html) {
@@ -101,9 +101,9 @@ export default async function(ctx) {
     if (sec.is_vpn) tags.push('VPN');
     if (sec.is_cloud_provider) tags.push('Hosting');
     if (sec.is_abuser) tags.push('Abuser');
-    if (!tags.length) return { sev: 0, t: 'ipreg: \u4F4E\u5371' };
+    if (!tags.length) return { sev: 0, t: 'ipregistry: \u4F4E\u5371' };
     var sev = tags.includes('Tor') || tags.includes('Abuser') ? 3 : tags.length >= 2 ? 2 : 1;
-    return { sev: sev, t: 'ipreg: ' + tags.join('/') };
+    return { sev: sev, t: 'ipregistry: ' + tags.join('/') };
   }
 
   function sevColor(sev) {
@@ -195,11 +195,16 @@ export default async function(ctx) {
 
   function ScoreRow(grade) {
     var col = sevColor(grade.sev);
+    var parts = grade.t.split(': ');
+    var src = parts[0] || grade.t;
+    var val = parts[1] || '';
     return {
       type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
       children: [
         { type: 'image', src: 'sf-symbol:' + sevIcon(grade.sev), color: col, width: 10, height: 10 },
-        { type: 'text', text: grade.t, font: { size: 10, family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5 },
+        { type: 'text', text: src, font: { size: 10 }, textColor: C_SUB },
+        { type: 'spacer' },
+        { type: 'text', text: val, font: { size: 10, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5 },
       ]
     };
   }
@@ -315,23 +320,21 @@ export default async function(ctx) {
       };
     }
 
-    // systemMedium - compact: left info + right scores
+    // systemMedium - top: ASN+location full width, bottom: left info + right scores
     if (family === 'systemMedium') {
-      var infoRows = [
+      var leftRows = [
         Row('globe', C_ICON_IP, ipLabel, showIP, C_GREEN),
-        Row('number.square.fill', C_ICON_IP, '\u5F52\u5C5E', asnText, C_GREEN),
-        Row('mappin.and.ellipse', C_ICON_LO, '\u4F4D\u7F6E', loc, C_MAIN),
         Row('building.2.fill', C_ICON_LO, '\u7C7B\u578B', hosting, C_SUB),
       ];
       if (uniqueTags.length) {
-        infoRows.push(Row('tag.fill', C_ORANGE, '\u6807\u8BB0', uniqueTags.join('/'), C_ORANGE));
+        leftRows.push(Row('tag.fill', C_ORANGE, '\u6807\u8BB0', uniqueTags.join('/'), C_ORANGE));
       }
       var scoreRows = [];
       for (var i = 0; i < grades.length; i++) {
         scoreRows.push(ScoreRow(grades[i]));
       }
       return {
-        type: 'widget', padding: [10, 12], gap: 6, backgroundColor: BG_COLOR,
+        type: 'widget', padding: [10, 12], gap: 5, backgroundColor: BG_COLOR,
         children: [
           { type: 'stack', direction: 'row', alignItems: 'center', gap: 6, children: [
             { type: 'image', src: 'sf-symbol:shield.lefthalf.filled', color: C_TITLE, width: 14, height: 14 },
@@ -340,8 +343,10 @@ export default async function(ctx) {
             { type: 'image', src: 'sf-symbol:' + sevIcon(maxSev), color: sevColor(maxSev), width: 12, height: 12 },
             { type: 'text', text: sevText(maxSev), font: { size: 11, weight: 'bold' }, textColor: sevColor(maxSev) },
           ]},
+          Row('number.square.fill', C_ICON_IP, '\u5F52\u5C5E', asnText, C_GREEN),
+          Row('mappin.and.ellipse', C_ICON_LO, '\u4F4D\u7F6E', loc, C_MAIN),
           { type: 'stack', direction: 'row', gap: 8, flex: 1, children: [
-            { type: 'stack', direction: 'column', gap: 3, flex: 1, children: infoRows },
+            { type: 'stack', direction: 'column', gap: 3, flex: 1, children: leftRows },
             { type: 'stack', direction: 'column', gap: 3, flex: 1, children: scoreRows },
           ]},
         ]
