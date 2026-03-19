@@ -165,6 +165,7 @@ export default async function (ctx) {
 
     function usageText(code) {
         if (!code) return '\u672A\u77E5';
+        if (code.indexOf('/') !== -1) return code;
         var map = { 'DCH': '\u6570\u636E\u4E2D\u5FC3', 'WEB': '\u6570\u636E\u4E2D\u5FC3', 'SES': '\u6570\u636E\u4E2D\u5FC3', 'CDN': 'CDN', 'MOB': '\u79FB\u52A8\u7F51\u7EDC', 'ISP': '\u5BB6\u5EAD\u5BBD\u5E26', 'COM': '\u5546\u4E1A\u5BBD\u5E26', 'EDU': '\u6559\u80B2\u7F51\u7EDC', 'RES': '\u4F4F\u5B85\u7F51\u7EDC' };
         var parts = code.toUpperCase().split('/');
         var r = [];
@@ -534,31 +535,31 @@ export default async function (ctx) {
                 type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
                 children: [
                     { type: 'image', src: 'sf-symbol:shield.lefthalf.filled', color: C_TITLE, width: 14, height: 14 },
-                    { type: 'text', text: 'IP检测 for ', font: { size: 11, weight: 'heavy' }, textColor: C_TITLE },
-                    { type: 'text', text: showIP, font: { size: 11, weight: 'bold', family: 'Menlo' }, textColor: C_GREEN, maxLines: 1 },
+                    { type: 'text', text: 'IP检测', font: { size: 10, weight: 'heavy' }, textColor: C_TITLE },
+                    { type: 'text', text: showIP, font: { size: 10, weight: 'bold', family: 'Menlo' }, textColor: C_GREEN, maxLines: 1 },
                     { type: 'spacer' },
                 ]
             };
             if (hostingShort) {
-                headerRow.children.push({ type: 'text', text: '类型:' + hosting, font: { size: 11, weight: 'bold' }, textColor: C_SUB });
+                headerRow.children.push({ type: 'text', text: hosting, font: { size: 10, weight: 'bold' }, textColor: C_SUB });
             }
             headerRow.children.push({ type: 'image', src: 'sf-symbol:' + sevIcon(maxSev), color: sevColor(maxSev), width: 12, height: 12 });
-            headerRow.children.push({ type: 'text', text: sevText(maxSev), font: { size: 11, weight: 'bold' }, textColor: sevColor(maxSev) });
+            headerRow.children.push({ type: 'text', text: sevText(maxSev), font: { size: 10, weight: 'bold' }, textColor: sevColor(maxSev) });
 
             var unlockRows = [
                 {
                     type: 'stack', direction: 'column', gap: 2,
                     children: [
-                        UnlockRow('GPT', uGPT, 11),
-                        UnlockRow('Gemini', uGemini, 11),
-                        UnlockRow('YouTube', uYouTube, 11),
+                        UnlockRow('GPT', uGPT, 10),
+                        UnlockRow('Gemini', uGemini, 10),
+                        UnlockRow('YouTube', uYouTube, 10),
                     ]
                 },
                 {
                     type: 'stack', direction: 'column', gap: 2,
                     children: [
-                        UnlockRow('\u5948\u98DE', uNetflix, 11),
-                        UnlockRow('TikTok', uTikTok, 11),
+                        UnlockRow('\u5948\u98DE', uNetflix, 10),
+                        UnlockRow('TikTok', uTikTok, 10),
                     ]
                 }
             ];
@@ -566,7 +567,7 @@ export default async function (ctx) {
             // 右半：数据库评分（含内联标记）
             var scoreRows = [];
             for (var i = 0; i < grades.length; i++) {
-                scoreRows.push(ScoreRow(grades[i], 11));
+                scoreRows.push(ScoreRow(grades[i], 10));
             }
 
             return {
