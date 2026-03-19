@@ -1,7 +1,7 @@
 /**
  * IP multi-source purity check widget + Streaming/AI unlock detection
  * Sources: IPPure / ipapi.is / IP2Location / Scamalytics / DB-IP / ipregistry / ipinfo
- * Unlock: ChatGPT / Gemini / Netflix / TikTok / Disney+
+ * Unlock: ChatGPT / Gemini / Netflix / TikTok / YouTube Premium
  * Env: POLICY, MARK_IP
  */
 export default async function (ctx) {
