@@ -1,7 +1,7 @@
 /**
  * IP multi-source purity check widget + Streaming/AI unlock detection
  * Sources: IPPure / ipapi.is / IP2Location / Scamalytics / DB-IP / ipregistry / ipinfo
- * Unlock: ChatGPT / Gemini / Netflix / TikTok / YouTube Premium
+ * Unlock: ChatGPT / Gemini / Netflix / TikTok / Disney+
  * Env: POLICY, MARK_IP
  */
 export default async function (ctx) {
@@ -380,7 +380,8 @@ export default async function (ctx) {
         };
     }
 
-    function ScoreRow(grade) {
+    function ScoreRow(grade, fz) {
+        var sz = fz || 10;
         var col = sevColor(grade.sev);
         var parts = grade.t.split(': ');
         var src = parts[0] || grade.t;
@@ -388,25 +389,26 @@ export default async function (ctx) {
         return {
             type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
             children: [
-                { type: 'image', src: 'sf-symbol:' + sevIcon(grade.sev), color: col, width: 10, height: 10 },
-                { type: 'text', text: src, font: { size: 10 }, textColor: C_SUB },
+                { type: 'image', src: 'sf-symbol:' + sevIcon(grade.sev), color: col, width: sz, height: sz },
+                { type: 'text', text: src, font: { size: sz }, textColor: C_SUB },
                 { type: 'spacer' },
-                { type: 'text', text: val, font: { size: 10, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5 },
+                { type: 'text', text: val, font: { size: sz, weight: 'bold', family: 'Menlo' }, textColor: col, maxLines: 1, minScale: 0.5 },
             ]
         };
     }
 
-    function UnlockRow(name, result) {
+    function UnlockRow(name, result, fz) {
+        var sz = fz || 10;
         var isOk = result !== "\u274C" && result !== "\uD83C\uDF7F" && result !== "\u23F3" && result !== "CN";
         var color = isOk ? C_GREEN : (result === "\uD83C\uDF7F" || result === "\u23F3" || result === "APP") ? C_YELLOW : C_RED;
         var icon = isOk ? 'checkmark.circle.fill' : (result === "\uD83C\uDF7F" || result === "\u23F3" || result === "APP") ? 'exclamationmark.circle.fill' : 'xmark.circle.fill';
         return {
             type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
             children: [
-                { type: 'image', src: 'sf-symbol:' + icon, color: color, width: 10, height: 10 },
-                { type: 'text', text: name, font: { size: 10 }, textColor: C_SUB },
+                { type: 'image', src: 'sf-symbol:' + icon, color: color, width: sz, height: sz },
+                { type: 'text', text: name, font: { size: sz }, textColor: C_SUB },
                 { type: 'spacer' },
-                { type: 'text', text: result, font: { size: 10, weight: 'bold' }, textColor: color, maxLines: 1 },
+                { type: 'text', text: result, font: { size: sz, weight: 'bold' }, textColor: color, maxLines: 1 },
             ]
         };
     }
@@ -471,7 +473,7 @@ export default async function (ctx) {
             if (grades[i].sev > maxSev) maxSev = grades[i].sev;
         }
         var showIP = markIP ? maskIP(ip) : ip;
-        var ipLabel = ip.includes(':') ? 'IPv6' : 'IPv4';
+        var ipLabel = ip.includes(':') ? 'IPv6' : 'IP';
 
         var family = ctx.widgetFamily || 'systemMedium';
 
@@ -528,17 +530,15 @@ export default async function (ctx) {
 
         // ===================== systemMedium — 新布局 =====================
         if (family === 'systemMedium') {
-            // 标题行：IP纯净度 + IPv4 | 类型 | 风险
             var headerRow = {
                 type: 'stack', direction: 'row', alignItems: 'center', gap: 4,
                 children: [
                     { type: 'image', src: 'sf-symbol:shield.lefthalf.filled', color: C_TITLE, width: 14, height: 14 },
-                    { type: 'text', text: 'IP\u7EAF\u51C0\u5EA6', font: { size: 13, weight: 'heavy' }, textColor: C_TITLE },
-                    { type: 'text', text: ipLabel + ': ' + showIP, font: { size: 10, weight: 'bold', family: 'Menlo' }, textColor: C_GREEN, maxLines: 1 },
+                    { type: 'text', text: 'IP检测 for ', font: { size: 11, weight: 'heavy' }, textColor: C_TITLE },
+                    { type: 'text', text: showIP, font: { size: 11, weight: 'bold', family: 'Menlo' }, textColor: C_GREEN, maxLines: 1 },
                     { type: 'spacer' },
                 ]
             };
-            // 类型完整文本（如 类型:数据中心(DCH)）
             if (hostingShort) {
                 headerRow.children.push({ type: 'text', text: '类型:' + hosting, font: { size: 11, weight: 'bold' }, textColor: C_SUB });
             }
@@ -549,16 +549,16 @@ export default async function (ctx) {
                 {
                     type: 'stack', direction: 'column', gap: 2,
                     children: [
-                        UnlockRow('GPT', uGPT),
-                        UnlockRow('Gemini', uGemini),
-                        UnlockRow('YouTube', uYouTube),
+                        UnlockRow('GPT', uGPT, 11),
+                        UnlockRow('Gemini', uGemini, 11),
+                        UnlockRow('YouTube', uYouTube, 11),
                     ]
                 },
                 {
                     type: 'stack', direction: 'column', gap: 2,
                     children: [
-                        UnlockRow('\u5948\u98DE', uNetflix),
-                        UnlockRow('TikTok', uTikTok),
+                        UnlockRow('\u5948\u98DE', uNetflix, 11),
+                        UnlockRow('TikTok', uTikTok, 11),
                     ]
                 }
             ];
@@ -566,7 +566,7 @@ export default async function (ctx) {
             // 右半：数据库评分（含内联标记）
             var scoreRows = [];
             for (var i = 0; i < grades.length; i++) {
-                scoreRows.push(ScoreRow(grades[i]));
+                scoreRows.push(ScoreRow(grades[i], 11));
             }
 
             return {
