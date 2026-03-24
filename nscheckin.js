@@ -6,6 +6,7 @@ let notifyOnlyFail = false;
 let enableCapture = true; // 默认开启抓取
 let useRandomReward = false; // 默认关闭随机鸡腿，走固定保底
 const COOKIE_CACHE_KEY = "NS_COOKIE"; // 持久化存储的Key
+const COOKIE_EXPIRY_KEY = "NS_COOKIE_EXPIRY";
 
 // 解析 $argument (支持传入 JSON 字符串)
 if (typeof $argument !== "undefined" && $argument) {
@@ -71,9 +72,27 @@ function handleCaptureCookie() {
     } else {
         // 利用 $persistentStore 持久化保存
         const success = $persistentStore.write(cookie, COOKIE_CACHE_KEY);
+
+        // 尝试从 Cookie 中提取 smac 并计算过期时间 (smac 包含登录时间戳，30天后过期)
+        let expiryDateStr = "未知";
+        try {
+            const smacMatch = cookie.match(/smac\s*=\s*(\d+)-/);
+            if (smacMatch && smacMatch[1]) {
+                const loginTimestamp = parseInt(smacMatch[1]) * 1000;
+                const expiryTimestamp = loginTimestamp + 2592000000;
+                $persistentStore.write(String(expiryTimestamp), COOKIE_EXPIRY_KEY);
+                expiryDateStr = formatDate(new Date(expiryTimestamp));
+                console.log(`[NS签到] ✨ 自动计算并缓存 Session 过期时间: ${expiryDateStr}`);
+            } else {
+                console.log("[NS签到] ⚠️ 未能在抓取的 Cookie 中找到形如 smac=177xxxx-xxx 的字段，无法预估过期时间。");
+            }
+        } catch (e) {
+            console.log(`[NS签到] ⚠️ 计算过期时间出错: ${e.message}`);
+        }
+
         if (success) {
             console.log("[NS签到] ✨ 成功保存 Cookie: " + cookie.substring(0, 30) + "...");
-            $notification.post("NS Cookie 获取成功", "", "Cookie 已安全持久化保存，请前往配置将其它的选项配好，并关闭【抓取开关】。");
+            $notification.post("NS Cookie 获取成功", "", `Cookie 已保存。\nSession 预计过期时间：${expiryDateStr}\n请前往配置关闭【抓取开关】。`);
         } else {
             console.log("[NS签到] ❌ 保存 Cookie 失败");
             $notification.post("NS Cookie 保存失败", "", "写入存储失败，请检查存储权限。");
@@ -87,6 +106,9 @@ function handleCaptureCookie() {
  * ============================================
  */
 async function handleCheckin() {
+    // ---- Cookie 过期检测 ----
+    await checkCookieExpiry();
+
     // 优先级: 插件传参 > PersistentStore 持久化存储
     let finalCookie = checkinCookie || $persistentStore.read(COOKIE_CACHE_KEY);
 
@@ -223,6 +245,53 @@ function escapeHtml(unsafe) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+}
+
+/**
+ * 格式化日期为 YYYY-MM-DD HH:mm
+ */
+function formatDate(date) {
+    const y = date.getFullYear();
+    const M = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const h = String(date.getHours()).padStart(2, '0');
+    const m = String(date.getMinutes()).padStart(2, '0');
+    return `${y}-${M}-${d} ${h}:${m}`;
+}
+
+/**
+ * 检查 Cookie 过期时间，不足48小时或已过期则推送提醒
+ */
+async function checkCookieExpiry() {
+    const cachedExpiry = $persistentStore.read(COOKIE_EXPIRY_KEY);
+    if (!cachedExpiry) {
+        console.log("[NS签到] 未检测到缓存的 Cookie 过期时间，跳过过期检测。");
+        return;
+    }
+
+    const expiryMs = parseInt(cachedExpiry);
+    if (isNaN(expiryMs)) return;
+
+    const now = Date.now();
+    const remainMs = expiryMs - now;
+    const remainHours = remainMs / (1000 * 60 * 60);
+    const expiryDateStr = formatDate(new Date(expiryMs));
+
+    if (remainMs <= 0) {
+        const warnMsg = `Session Cookie 已于 ${expiryDateStr} 过期，签到可能失败！请重新登录 NodeSeek 并抓取 Cookie。`;
+        console.log(`[NS签到] 🔴 ${warnMsg}`);
+        $notification.post("NS签到警告", "🔴 Cookie 已过期", warnMsg);
+        await sendTgNotify(`<b>🔴 NodeSeek Cookie 已过期</b>\n\n过期时间: <code>${expiryDateStr}</code>\n请立即重新登录 NodeSeek 并重新抓取 Cookie。`);
+    } else if (remainHours < 48) {
+        const hours = Math.floor(remainHours);
+        const warnMsg = `Session Cookie 将在约 ${hours} 小时后过期（${expiryDateStr}），请尽快重新登录 NodeSeek 刷新 Cookie！`;
+        console.log(`[NS签到] 🟡 ${warnMsg}`);
+        $notification.post("NS签到警告", "🟡 Cookie 即将过期", warnMsg);
+        await sendTgNotify(`<b>🟡 NodeSeek Cookie 即将过期</b>\n\n剩余时间: <code>约 ${hours} 小时</code>\n过期时间: <code>${expiryDateStr}</code>\n建议重新登录 NodeSeek 刷新 Cookie。`);
+    } else {
+        const days = Math.floor(remainHours / 24);
+        console.log(`[NS签到] ✅ Cookie 过期检测正常，剩余约 ${days} 天 (${expiryDateStr} 过期)`);
+    }
 }
 
 /**
