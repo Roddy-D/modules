@@ -287,7 +287,7 @@ async function checkCookieExpiry() {
         const warnMsg = `Session Cookie 将在约 ${hours} 小时后过期（${expiryDateStr}），请尽快重新登录 NodeSeek 刷新 Cookie！`;
         console.log(`[NS签到] 🟡 ${warnMsg}`);
         $notification.post("NS签到警告", "🟡 Cookie 即将过期", warnMsg);
-        await sendTgNotify(`<b>🟡 NodeSeek Cookie 即将过期</b>\n\n剩余时间: <code>约 ${hours} 小时</code>\n过期时间: <code>${expiryDateStr}</code>\n建议重新登录 NodeSeek 刷新 Cookie。`);
+        await sendTgNotify(`<b>🟡 NodeSeek Cookie 即将过期</b>\n\n剩余时间: <code>约 ${hours} 小时</code>\n过期时间: <code>${expiryDateStr}</code>\n建议重新登录 NodeSeek 并重新抓取 Cookie。`);
     } else {
         const days = Math.floor(remainHours / 24);
         console.log(`[NS签到] ✅ Cookie 过期检测正常，剩余约 ${days} 天 (${expiryDateStr} 过期)`);
