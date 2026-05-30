@@ -1,0 +1,14 @@
+#!name=V2EX 每日签到增强版
+#!desc=V2EX 论坛每日自动签到领取铜币，支持 TG 推送。开启抓取开关后访问个人主页即可获取 Cookie。
+#!author=Roddy-D
+#!date=2026-05-30
+#!arguments=签到执行时间:10 9 * * *,开启Cookie抓取:true,V2EX Cookie:xxx,TG Bot Token:xxx,TG User ID:xxx,仅失败时通知:false
+#!icon=https://raw.githubusercontent.com/lige47/QuanX-icon-rule/main/icon/04ProxySoft/V2ex.png
+#!arguments-desc=签到执行时间: 默认每天 9:10 执行 (格式如 10 9 * * *)\n\n开启Cookie抓取\n- true: 打开后去 V2EX 个人主页可自动抓取 Cookie。抓到后请关闭\n- false: 关闭抓取\n\nV2EX Cookie: 抓取后会自动保存，若手动配置则在此填入完整 Cookie\n\nTG Bot Token: 选填，Telegram 机器人的 Token\n\nTG User ID: 选填，接收消息的 Telegram User ID\n\n仅失败时通知\n- false: 所有签到结果都发送\n- true: 仅在签到失败、异常时才推送 TG
+
+[Script]
+V2EX签到获取Cookie = type=http-request, pattern=^https:\/\/www\.v2ex\.com\/(mission|member).*, requires-body=false, script-path=https://raw.githubusercontent.com/Roddy-D/modules/refs/heads/main/v2ex.js, argument="{"ENABLE_CAPTURE":{{{开启Cookie抓取}}}}"
+V2EX签到定时执行 = type=cron, cronexp="{{{签到执行时间}}}", script-path=https://raw.githubusercontent.com/Roddy-D/modules/refs/heads/main/v2ex.js, argument="{"V2EX_COOKIE":"{{{V2EX Cookie}}}","TG_BOT_TOKEN":"{{{TG Bot Token}}}","TG_USER_ID":"{{{TG User ID}}}","TG_NOTIFY_ONLY_FAIL":{{{仅失败时通知}}}}"
+
+[MITM]
+hostname = %APPEND% www.v2ex.com
