@@ -241,9 +241,9 @@ function formatBalance(html) {
         if (!html) return "";
         const block = html.match(/balance_area bigger[\s\S]*?<\/div>/);
         if (!block) return "";
-        const gold = (block[0].match(/(\d+)\s*<img.*?alt="G"/) || [])[1] || "0";
-        const silver = (block[0].match(/(\d+)\s*<img.*?alt="S"/) || [])[1] || "0";
-        const bronze = (block[0].match(/(\d+)\s*<img.*?alt="B"/) || [])[1] || "0";
+        const gold = (block[0].match(/(\d+)\s*<img[^>]*?alt="G"/) || [])[1] || "0";
+        const silver = (block[0].match(/(\d+)\s*<img[^>]*?alt="S"/) || [])[1] || "0";
+        const bronze = (block[0].match(/(\d+)\s*<img[^>]*?alt="B"/) || [])[1] || "0";
         return `${gold} 金币, ${silver} 银币, ${bronze} 铜币`;
     } catch (e) {
         console.log("[V2EX签到] 解析余额出错: " + e);
