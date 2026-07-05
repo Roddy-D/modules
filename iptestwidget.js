@@ -184,7 +184,7 @@ export default async function (ctx) {
 
     async function fetchIpreg(ip) {
         var html = await get('https://ipregistry.co', { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' });
-        var m = String(html).match(/apiKey="([a-zA-Z0-9]+)"/);
+        var m = String(html).match(/api-?key="([a-zA-Z0-9]+)"/i);
         if (!m) return null;
         return jp(await get('https://api.ipregistry.co/' + encodeURIComponent(ip) + '?hostname=true&key=' + m[1], {
             'Origin': 'https://ipregistry.co', 'Referer': 'https://ipregistry.co/', 'User-Agent': 'Mozilla/5.0'
