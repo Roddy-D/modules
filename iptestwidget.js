@@ -122,15 +122,18 @@ export default async function (ctx) {
         return null;
     }
 
-    function gradeIpreg(j, ipinfoDetected) {
-        if (!j || j.code) return null;
-        var sec = j.security || {};
+    // sec 为扁平的标记对象（fetchIpreg 解析详情页得到），不再是 j.security
+    function gradeIpreg(sec, ipinfoDetected) {
+        if (!sec) return null;
         var tags = [];
         if (sec.is_proxy) tags.push('Proxy');
-        if (sec.is_tor || sec.is_tor_exit) tags.push('Tor');
+        if (sec.is_tor) tags.push('Tor');
         if (sec.is_vpn) tags.push('VPN');
+        if (sec.is_relay) tags.push('Relay');
         // Hosting 已在标题行类型中显示，不重复
         if (sec.is_abuser) tags.push('Abuser');
+        if (sec.is_attacker) tags.push('Attacker');
+        if (sec.is_threat) tags.push('Threat');
         // 合并 ipinfo 检测结果
         if (ipinfoDetected && ipinfoDetected.length) {
             for (var i = 0; i < ipinfoDetected.length; i++) {
@@ -138,9 +141,8 @@ export default async function (ctx) {
                 if (tags.indexOf(ipinfoDetected[i]) === -1) tags.push(ipinfoDetected[i]);
             }
         }
-        var tagStr = tags.length ? ' ' + tags.join('/') : '';
         if (!tags.length) return { sev: 0, t: 'ipregistry: \u4F4E\u5371' };
-        var sev = tags.indexOf('Tor') !== -1 || tags.indexOf('Abuser') !== -1 ? 3 : tags.length >= 2 ? 2 : 1;
+        var sev = tags.indexOf('Tor') !== -1 || tags.indexOf('Abuser') !== -1 || tags.indexOf('Attacker') !== -1 ? 3 : tags.length >= 2 ? 2 : 1;
         return { sev: sev, t: 'ipregistry: ' + tags.join('/') };
     }
 
@@ -182,13 +184,33 @@ export default async function (ctx) {
     async function fetchDbip(ip) { return await get('https://db-ip.com/' + encodeURIComponent(ip)); }
     async function fetchScam(ip) { return await get('https://scamalytics.com/ip/' + encodeURIComponent(ip)); }
 
-    async function fetchIpreg(ip) {
-        var html = await get('https://ipregistry.co', { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' });
-        var m = String(html).match(/api-?key="([a-zA-Z0-9]+)"/i);
+    // 从 ipregistry.co/{ip} 详情页里，按字段名提取 Yes/No 布尔值
+    function ipregFlag(html, fieldName) {
+        var re = new RegExp(
+            fieldName + '</span>[\\s\\S]{0,300}?<div class="(?:positive|negative)">[\\s\\S]{0,800}?(Yes|No)</div>',
+            'i'
+        );
+        var m = html.match(re);
         if (!m) return null;
-        return jp(await get('https://api.ipregistry.co/' + encodeURIComponent(ip) + '?hostname=true&key=' + m[1], {
-            'Origin': 'https://ipregistry.co', 'Referer': 'https://ipregistry.co/', 'User-Agent': 'Mozilla/5.0'
+        return m[1].trim().toLowerCase() === 'yes';
+    }
+
+    // 直接抓取 ipregistry.co/{IP} 详情页解析 Security 板块（不再依赖抓取 API Key）
+    async function fetchIpreg(ip) {
+        var html = String(await get('https://ipregistry.co/' + encodeURIComponent(ip), {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }));
+        var fields = ['Abuser', 'Attacker', 'Bogon', 'Cloud Provider', 'Proxy', 'Relay', 'Tor', 'VPN', 'Anonymous', 'Threat'];
+        var keys = ['is_abuser', 'is_attacker', 'is_bogon', 'is_cloud_provider', 'is_proxy', 'is_relay', 'is_tor', 'is_vpn', 'is_anonymous', 'is_threat'];
+        var out = {}, allNull = true;
+        for (var i = 0; i < fields.length; i++) {
+            var v = ipregFlag(html, fields[i]);
+            out[keys[i]] = v;
+            if (v !== null) allNull = false;
+        }
+        // 一个字段都没解析到，说明页面结构变了或请求失败，视为获取失败
+        if (allNull) return null;
+        return out;
     }
 
     async function fetchIp2loc(ip) {
@@ -196,7 +218,20 @@ export default async function (ctx) {
         var um = html.match(/Usage\s*Type<\/label>\s*<p[^>]*>\s*\(([A-Z]+)\)/i)
             || html.match(/Usage\s*Type<\/label>\s*<p[^>]*>\s*([A-Z]+(?:\/[A-Z]+)?)\s*</i);
         var fm = html.match(/Fraud\s*Score<\/label>\s*<p[^>]*>\s*(\d+)/i);
-        return { usageType: um ? um[1] : null, fraudScore: fm ? ti(fm[1]) : null };
+        // 归属地 / ASN（用于 ipapi 失败时回落）
+        var cm = html.match(/>Country<\/label>[\s\S]{0,300}?<a[^>]*>([^(<]+)\(([A-Z]{2})\)<\/a>/i);
+        var cim = html.match(/>City<\/label>\s*<p[^>]*>([^<]+)<\/p>/i);
+        var am = html.match(/>ASN<\/label>[\s\S]{0,300}?<a[^>]*>(\d+)<\/a>/i);
+        var aom = html.match(/>AS<\/label>[\s\S]{0,300}?<a[^>]*>([^<]+)<\/a>/i);
+        return {
+            usageType: um ? um[1] : null,
+            fraudScore: fm ? ti(fm[1]) : null,
+            country: cm ? cm[1].trim() : null,
+            countryCode: cm ? cm[2].trim() : null,
+            city: cim ? cim[1].trim() : null,
+            asn: am ? am[1].trim() : null,
+            asOrg: aom ? aom[1].trim() : null
+        };
     }
 
     async function fetchIpinfo(ip) {
@@ -451,10 +486,31 @@ export default async function (ctx) {
         var uYouTube = results[10] || "\u274C";
 
         var ipapiD = rIpapi || {};
-        var asnText = (ipapiD.asn && ipapiD.asn.asn) ? ('AS' + ipapiD.asn.asn + ' ' + (ipapiD.asn.org || '')).trim() : '\u672A\u77E5';
-        var cc = (ipapiD.location && ipapiD.location.country_code) || '';
-        var country = (ipapiD.location && ipapiD.location.country) || '';
-        var city = (ipapiD.location && ipapiD.location.city) || '';
+
+        // ipapi 是否有效返回了地理信息 / ASN，没有则回落到 IP2Location
+        var ipapiHasLoc = !!(ipapiD.location && (ipapiD.location.country_code || ipapiD.location.country));
+        var ipapiHasAsn = !!(ipapiD.asn && ipapiD.asn.asn);
+
+        var asnText;
+        if (ipapiHasAsn) {
+            asnText = ('AS' + ipapiD.asn.asn + ' ' + (ipapiD.asn.org || '')).trim();
+        } else if (rIp2loc && rIp2loc.asn) {
+            asnText = ('AS' + rIp2loc.asn + ' ' + (rIp2loc.asOrg || '')).trim();
+        } else {
+            asnText = '\u672A\u77E5';
+        }
+
+        var cc = '', country = '', city = '';
+        if (ipapiHasLoc) {
+            cc = ipapiD.location.country_code || '';
+            country = ipapiD.location.country || '';
+            city = ipapiD.location.city || '';
+        } else if (rIp2loc && (rIp2loc.country || rIp2loc.city)) {
+            cc = rIp2loc.countryCode || '';
+            country = rIp2loc.country || '';
+            city = rIp2loc.city || '';
+        }
+
         var loc = (toFlag(cc) + ' ' + country + ' ' + city).trim() || '\u672A\u77E5\u4F4D\u7F6E';
         var hosting = usageText(rIp2loc && rIp2loc.usageType);
         var hostingShort = rIp2loc && rIp2loc.usageType ? rIp2loc.usageType : '';
