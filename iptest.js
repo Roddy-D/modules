@@ -88,13 +88,21 @@ function gradeIpapi(j) {
 }
 
 function parseIp2locationIo(data) {
-    if (!data) return { usageType: null, fraudScore: null, isProxy: false, proxyType: "-", threat: "-" };
+    if (!data) return {
+        usageType: null, fraudScore: null, isProxy: false, proxyType: "-", threat: "-",
+        country: null, countryCode: null, city: null, asn: null, asOrg: null
+    };
     return {
         usageType: data.as_usage_type || null,
         fraudScore: data.fraud_score ?? null,
         isProxy: data.is_proxy || false,
         proxyType: data.proxy_type || "-",
-        threat: data.threat || "-"
+        threat: data.threat || "-",
+        country: data.country || null,
+        countryCode: data.country_code || null,
+        city: data.city || null,
+        asn: data.asn || null,
+        asOrg: data.as_org || null
     };
 }
 
@@ -148,16 +156,16 @@ function gradeScamalytics(html) {
     return { sev: 0, text: `Scamalytics：✅ 低风险 (${s})` };
 }
 
-function gradeIpregistry(j) {
-    if (!j || j.code) return { sev: 2, text: "ipregistry：获取失败" };
-    const sec = j.security || {};
+// 直接接收扁平的 security 标记对象（由 fetchIpregistry 解析详情页得到）
+function gradeIpregistry(sec) {
+    if (!sec) return { sev: 2, text: "ipregistry：获取失败" };
     const items = [];
     if (sec.is_proxy === true) items.push("Proxy");
-    if (sec.is_tor === true || sec.is_tor_exit === true) items.push("Tor");
+    if (sec.is_tor === true) items.push("Tor");
     if (sec.is_vpn === true) items.push("VPN");
     if (sec.is_cloud_provider === true) items.push("Hosting");
     if (sec.is_abuser === true) items.push("Abuser");
-    if (items.length === 0) return { sev: 0, text: "ipregistry：✅ 低风险" };
+    if (items.length === 0) return { sev: 0, text: "ipregistry：✅ 低风险（无标记）" };
     const sev = items.includes("Tor") ? 3 : items.includes("Abuser") ? 3 : items.length >= 2 ? 2 : 1;
     const label = sev >= 3 ? "⚠️ 高风险" : sev >= 2 ? "🔶 较高风险" : "🔶 有标记";
     return { sev, text: `ipregistry：${label} (${items.join("/")})` };
@@ -186,21 +194,52 @@ async function fetchScamalyticsHtml(ip) {
     return String(data);
 }
 
-async function fetchIpregistry(ip) {
-    let apiKey = null;
-    try {
-        const { data: html } = await httpGet("https://ipregistry.co", {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        });
-        const keyMatch = String(html).match(/api-?key="([a-zA-Z0-9]+)"/i);
-        if (keyMatch) apiKey = keyMatch[1];
-    } catch (_) { }
-    if (!apiKey) throw new Error("无法获取 API Key");
-    const { data } = await httpGet(
-        `https://api.ipregistry.co/${encodeURIComponent(ip)}?hostname=true&key=${apiKey}`,
-        { "Origin": "https://ipregistry.co", "Referer": "https://ipregistry.co/", "User-Agent": "Mozilla/5.0" }
+// 从 ipregistry.co/{ip} 详情页里，按字段名提取 Yes/No 布尔值
+function extractIpregistrySecurityFlag(html, fieldName) {
+    const re = new RegExp(
+        `${fieldName}</span>[\\s\\S]{0,300}?<div class="(?:positive|negative)">[\\s\\S]{0,800}?(Yes|No)</div>`,
+        "i"
     );
-    return safeJsonParse(data);
+    const m = html.match(re);
+    if (!m) return null;
+    return m[1].trim().toLowerCase() === "yes";
+}
+
+// 直接抓取 ipregistry.co/{IP} 详情页解析 Security 板块（不再依赖抓取 API Key）
+async function fetchIpregistry(ip) {
+    const { data } = await httpGet(`https://ipregistry.co/${encodeURIComponent(ip)}`, {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    });
+    const html = String(data);
+
+    const isAbuser = extractIpregistrySecurityFlag(html, "Abuser");
+    const isAttacker = extractIpregistrySecurityFlag(html, "Attacker");
+    const isBogon = extractIpregistrySecurityFlag(html, "Bogon");
+    const isCloudProvider = extractIpregistrySecurityFlag(html, "Cloud Provider");
+    const isProxy = extractIpregistrySecurityFlag(html, "Proxy");
+    const isRelay = extractIpregistrySecurityFlag(html, "Relay");
+    const isTor = extractIpregistrySecurityFlag(html, "Tor");
+    const isVpn = extractIpregistrySecurityFlag(html, "VPN");
+    const isAnonymous = extractIpregistrySecurityFlag(html, "Anonymous");
+    const isThreat = extractIpregistrySecurityFlag(html, "Threat");
+
+    // 一个字段都没解析到，说明页面结构变了或请求失败，视为获取失败
+    const allNull = [isAbuser, isAttacker, isBogon, isCloudProvider, isProxy, isRelay, isTor, isVpn, isAnonymous, isThreat]
+        .every(v => v === null);
+    if (allNull) return null;
+
+    return {
+        is_abuser: isAbuser,
+        is_attacker: isAttacker,
+        is_bogon: isBogon,
+        is_cloud_provider: isCloudProvider,
+        is_proxy: isProxy,
+        is_relay: isRelay,
+        is_tor: isTor,
+        is_vpn: isVpn,
+        is_anonymous: isAnonymous,
+        is_threat: isThreat,
+    };
 }
 
 async function fetchIp2locationIo(ip) {
@@ -212,12 +251,28 @@ async function fetchIp2locationIo(ip) {
     const proxyMatch = html.match(/>Proxy<\/label>\s*<p[^>]*>[^<]*<i[^>]*><\/i>\s*(Yes|No)/i);
     const proxyTypeMatch = html.match(/Proxy\s*Type<\/label>\s*<p[^>]*>\s*([^<]+)/i);
     const threatMatch = html.match(/>Threat<\/label>\s*<p[^>]*>\s*([^<]+)/i);
+
+    // 归属地 / ASN（用于 ipapi 失败时回落）
+    // Country: >Country</label> ... <a ...>United States of America (US)</a>
+    const countryMatch = html.match(/>Country<\/label>[\s\S]{0,300}?<a[^>]*>([^(<]+)\(([A-Z]{2})\)<\/a>/i);
+    // City: >City</label> <p class="ip-result">Los Angeles</p>
+    const cityMatch = html.match(/>City<\/label>\s*<p[^>]*>([^<]+)<\/p>/i);
+    // ASN: >ASN</label> ... <a ...>25820</a>
+    const asnMatch = html.match(/>ASN<\/label>[\s\S]{0,300}?<a[^>]*>(\d+)<\/a>/i);
+    // AS（组织名）: >AS</label> ... <a ...>IT7 Networks Inc</a>
+    const asOrgMatch = html.match(/>AS<\/label>[\s\S]{0,300}?<a[^>]*>([^<]+)<\/a>/i);
+
     return {
         as_usage_type: usageMatch ? usageMatch[1] : null,
         fraud_score: fraudMatch ? toInt(fraudMatch[1]) : null,
         is_proxy: proxyMatch ? proxyMatch[1].toLowerCase() === "yes" : false,
         proxy_type: proxyTypeMatch ? proxyTypeMatch[1].trim() : "-",
-        threat: threatMatch ? threatMatch[1].trim() : "-"
+        threat: threatMatch ? threatMatch[1].trim() : "-",
+        country: countryMatch ? countryMatch[1].trim() : null,
+        country_code: countryMatch ? countryMatch[2].trim() : null,
+        city: cityMatch ? cityMatch[1].trim() : null,
+        asn: asnMatch ? asnMatch[1].trim() : null,
+        as_org: asOrgMatch ? asOrgMatch[1].trim() : null
     };
 }
 
@@ -285,14 +340,37 @@ async function fetchIpinfoIo(ip) {
     }
 
     const ipapiData = ok.ipapi || {};
-    const asnText = ipapiData.asn?.asn ? `AS${ipapiData.asn.asn} ${ipapiData.asn.org || ""}`.trim() : "-";
-    const countryCode = ipapiData.location?.country_code || "";
-    const country = ipapiData.location?.country || "";
-    const city = ipapiData.location?.city || "";
-    const flag = flagEmoji(countryCode);
-
     const ip2loc = parseIp2locationIo(ok.ip2locIo);
     const hostingLine = ip2locationHostingText(ip2loc.usageType);
+
+    // ipapi 是否有效返回了地理信息 / ASN，没有则回落到 IP2Location
+    const ipapiHasLocation = !!(ipapiData.location?.country_code || ipapiData.location?.country);
+    const ipapiHasAsn = !!ipapiData.asn?.asn;
+
+    let countryCode, country, city;
+    if (ipapiHasLocation) {
+        countryCode = ipapiData.location?.country_code || "";
+        country = ipapiData.location?.country || "";
+        city = ipapiData.location?.city || "";
+    } else if (ip2loc.country || ip2loc.city) {
+        countryCode = ip2loc.countryCode || "";
+        country = ip2loc.country || "";
+        city = ip2loc.city || "";
+    } else {
+        countryCode = "";
+        country = "";
+        city = "";
+    }
+    const flag = flagEmoji(countryCode);
+
+    let asnText;
+    if (ipapiHasAsn) {
+        asnText = `AS${ipapiData.asn.asn} ${ipapiData.asn.org || ""}`.trim();
+    } else if (ip2loc.asn) {
+        asnText = `AS${ip2loc.asn} ${ip2loc.asOrg || ""}`.trim();
+    } else {
+        asnText = "-";
+    }
 
     const grades = [];
     grades.push(gradeIppure(ippureFraudScore));
@@ -335,14 +413,19 @@ ${riskLines.join('\n')}`;
     if (ok.ipinfoIo?.detected?.length) {
         factorParts.push(`ipinfo: ${ok.ipinfoIo.detected.join("/")}`);
     }
-    if (ok.ipregistry?.security) {
-        const sec = ok.ipregistry.security;
+    if (ok.ipregistry) {
+        const sec = ok.ipregistry;
         const items = [];
         if (sec.is_proxy === true) items.push("Proxy");
         if (sec.is_tor === true) items.push("Tor");
+        if (sec.is_relay === true) items.push("Relay");
         if (sec.is_vpn === true) items.push("VPN");
+        if (sec.is_anonymous === true) items.push("Anonymous");
         if (sec.is_cloud_provider === true) items.push("Hosting");
         if (sec.is_abuser === true) items.push("Abuser");
+        if (sec.is_attacker === true) items.push("Attacker");
+        if (sec.is_bogon === true) items.push("Bogon");
+        if (sec.is_threat === true) items.push("Threat");
         if (items.length) factorParts.push(`ipregistry: ${items.join("/")}`);
     }
 
