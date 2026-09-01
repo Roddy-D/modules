@@ -77,22 +77,16 @@ export default async function (ctx) {
     }
 
     function gradeIpapi(j) {
-        if (!j || !j.company || !j.company.abuser_score) return null;
-        var m = String(j.company.abuser_score).match(/([0-9.]+)\s*\(([^)]+)\)/);
-        if (!m) return null;
-        var pct = Math.round(Number(m[1]) * 10000) / 100 + '%';
-        var lv = String(m[2]).trim();
-        var map = { 'Very Low': 0, 'Low': 0, 'Elevated': 2, 'High': 3, 'Very High': 4 };
-        var sev = map[lv] !== undefined ? map[lv] : 2;
-        // 收集标记
+        if (!j || typeof j.is_datacenter === 'undefined') return null;
         var tags = [];
         if (j.is_vpn) tags.push('VPN');
         if (j.is_proxy) tags.push('Proxy');
         if (j.is_tor) tags.push('Tor');
-        // DC/Hosting 已在标题行类型中显示，不重复
         if (j.is_abuser) tags.push('Abuser');
-        var tagStr = tags.length ? ' ' + tags.join('/') : '';
-        return { sev: sev, t: 'ipapi: ' + lv + ' (' + pct + ')' + tagStr };
+        if (j.is_datacenter) tags.push('Datacenter');
+        if (!tags.length) return { sev: 0, t: 'ipapi: \u4F4E\u5371' };
+        var sev = (j.is_abuser || j.is_tor) ? 3 : (tags.length >= 2 ? 2 : 1);
+        return { sev: sev, t: 'ipapi: ' + tags.join('/') };
     }
 
     function gradeIp2loc(score) {
