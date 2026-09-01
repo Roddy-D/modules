@@ -71,20 +71,21 @@ function gradeIppure(score) {
 }
 
 function gradeIpapi(j) {
-    if (!j || !j.company) return { sev: 2, text: "ipapi：获取失败" };
-    const abuserScoreText = j.company.abuser_score;
-    if (!abuserScoreText || typeof abuserScoreText !== "string") {
-        return { sev: 2, text: "ipapi：无评分" };
-    }
-    const m = abuserScoreText.match(/([0-9.]+)\s*\(([^)]+)\)/);
-    if (!m) return { sev: 2, text: `ipapi：${abuserScoreText}` };
-    const ratio = Number(m[1]);
-    const level = String(m[2] || "").trim();
-    const pct = Number.isFinite(ratio) ? `${Math.round(ratio * 10000) / 100}%` : "?";
-    const sevByLevel = { "Very Low": 0, Low: 0, Elevated: 2, High: 3, "Very High": 4 };
-    const sev = sevByLevel[level] ?? 2;
-    const label = sev >= 4 ? "🛑 极高风险" : sev >= 3 ? "⚠️ 高风险" : sev >= 2 ? "🔶 较高风险" : "✅ 低风险";
-    return { sev, text: `ipapi：${label} (${pct}, ${level})` };
+  if (!j || typeof j !== "object" || !("ip" in j)) {
+    return { sev: 2, text: "ipapi：获取失败" };
+  }
+  const items = [];
+  if (j.is_proxy === true) items.push("Proxy");
+  if (j.is_vpn === true) items.push("VPN");
+  if (j.is_tor === true) items.push("Tor");
+  if (j.is_abuser === true) items.push("Abuser");
+  if (j.is_datacenter === true) items.push("Datacenter");
+  if (items.length === 0) {
+    return { sev: 0, text: "ipapi：✅ 低风险（无标记）" };
+  }
+  const sev = j.is_abuser || j.is_tor ? 3 : items.length >= 2 ? 2 : 1;
+  const label = sev >= 3 ? "⚠️ 高风险" : sev >= 2 ? "🔶 较高风险" : "🔶 有标记";
+  return { sev, text: `ipapi：${label} (${items.join("/")})` };
 }
 
 function parseIp2locationIo(data) {
